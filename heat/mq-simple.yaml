@@ -1,0 +1,117 @@
+# © Copyright IBM Corporation 2016
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+heat_template_version: 2014-10-16
+
+description: >
+  MQ server with persistent storage
+parameters:
+  key_name:
+    type: string
+    description: Name of an existing key pair to use for the server
+    constraints:
+      - custom_constraint: nova.keypair
+  flavor:
+    type: string
+    description: Flavor for each server to be created
+    default: m1.small
+    constraints:
+      - custom_constraint: nova.flavor
+  image:
+    type: string
+    description: Image ID or image name to use for the server
+    constraints:
+      - custom_constraint: glance.image
+  public_net:
+    type: string
+    description: ID or name of public network on which floating IP addresses will be allocated
+    constraints:
+      - custom_constraint: neutron.network
+
+resources:
+  mq_net:
+    type: OS::Neutron::Net
+    properties:
+      name: mq_net
+
+  mq_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network_id: { get_resource: mq_net }
+      cidr: 192.168.0.0/16
+      gateway_ip: 192.168.0.1
+      allocation_pools:
+        - start: 192.168.0.2
+          end: 192.168.0.254
+      dns_nameservers:
+        - 8.8.8.8
+        - 8.8.4.4
+
+  mq_router:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info:
+        network: { get_param: public_net }
+
+  mq_router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: mq_router }
+      subnet_id: { get_resource: mq_subnet }
+
+  mq_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: public_net }
+
+  mq_floating_ip_assoc:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: {get_resource: mq_floating_ip}
+      port_id: {get_attr: [mq_server, addresses, mq_net, 0, port]}
+
+  mq_security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      description: IBM MQ firewall rules
+      rules:
+      - protocol: icmp
+        direction: ingress
+      - protocol: tcp
+        direction: ingress
+        port_range_min: 22
+        port_range_max: 22
+      - protocol: tcp
+        direction: ingress
+        port_range_min: 1414
+        port_range_max: 1414
+      - protocol: tcp
+        direction: egress
+
+  mq_server:
+    type: OS::Nova::Server
+    properties:
+      key_name: { get_param: key_name }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      networks:
+        - network: { get_resource: mq_net }
+      security_groups:
+        - { get_resource: mq_security_group }
+
+outputs:
+  mq_ip_public:
+    description: >
+      Public IP address of the MQ server.
+    value: { get_attr: [mq_floating_ip, floating_ip_address] }
