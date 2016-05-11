@@ -20,6 +20,7 @@ export DEBIAN_FRONTEND=noninteractive
 # Recommended: Update all packages to the latest level
 apt-get update
 apt-get upgrade -y
+apt-get update
 # These packages should already be present, but let's make sure
 apt-get install -y \
     bash \
