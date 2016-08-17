@@ -1,0 +1,45 @@
+* (C) Copyright IBM Corporation 2016
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+* http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*
+* This file is used to configure the Queue Manager C1QM1, it is run in runmqsc
+* and is used in the createQM.sh file.
+
+***********************************************
+* Config for common Queue Manager
+*
+* Create and start a listener and Server
+* connection channel for client connections.
+***********************************************
+
+DEFINE LISTENER(LISTENER.TCP) TRPTYPE(TCP) PORT(1414) CONTROL(QMGR) REPLACE
+START LISTENER(LISTENER.TCP)
+
+DEFINE CHANNEL(CLIENT.CHANNEL) CHLTYPE(SVRCONN) MCAUSER('mqm') REPLACE
+
+***********************************************
+* Define a local Queue to hold test messages
+***********************************************
+
+DEFINE QLOCAL(LOCAL.QUEUE)
+
+***********************************************
+* For MQ V7.1 or above: Disable channel authentication record temporarily
+***********************************************
+ALTER QMGR CHLAUTH(DISABLED)
+
+***********************************************
+* For MQ V8 or above: Disable connection authentication temporarily
+***********************************************
+ALTER QMGR CONNAUTH(' ')
+REFRESH SECURITY TYPE(CONNAUTH)

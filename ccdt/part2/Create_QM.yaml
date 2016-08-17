@@ -1,0 +1,178 @@
+# © Copyright IBM Corporation 2016
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# This heat template is used to create the OpenStack Heat Stack that creates 10
+# VM's which have a Queue Manager created and configured on them.
+
+heat_template_version: 2014-10-16
+
+description: >
+  This file creates 1 instance that hosts a single Queue Manager and registers it with the CCDT Server.
+parameters:
+  key_name:
+    type: string
+    description: Name of an existing key pair to use for the server
+    constraints:
+      - custom_constraint: nova.keypair
+  flavor:
+    type: string
+    description: Flavor for each server to be created. Must have at least - 2 CPUs, 4GB Memory and 20GB disk space.
+    constraints:
+      - custom_constraint: nova.flavor
+  server_image:
+    type: string
+    description: Image ID or image name to use for the server
+    constraints:
+      - custom_constraint: glance.image
+  public_net:
+    type: string
+    description: ID or name of public network on which floating IP addresses will be allocated
+    constraints:
+      - custom_constraint: neutron.network
+  CCDT_ip:
+    type: string
+    description: IP Address of the CCDT Server
+    constraints:
+      - custom_constraint: ip_addr
+
+resources:
+  mq_security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      description: IBM MQ firewall rules
+      rules:
+      - direction: egress
+        ethertype: IPv4
+      - protocol: icmp
+        direction: ingress
+      - protocol: tcp
+        direction: ingress
+        port_range_min: 22
+        port_range_max: 22
+      - protocol: tcp
+        direction: ingress
+        port_range_min: 1414
+        port_range_max: 1414
+
+#
+# Network
+#
+  mq_server_net:
+    type: OS::Neutron::Net
+    properties:
+      name: mq_server_net
+
+  mq_server_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      network_id: { get_resource: mq_server_net }
+      cidr: 192.168.0.0/24
+      gateway_ip: 192.168.0.1
+      allocation_pools:
+        - start: 192.168.0.2
+          end: 192.168.0.254
+      dns_nameservers:
+        - 8.8.8.8
+        - 8.8.4.4
+
+  mq_server_router:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info:
+        network: { get_param: public_net }
+
+  mq_server_router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: mq_server_router }
+      subnet_id: { get_resource: mq_server_subnet }
+
+  mq_server_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: public_net }
+
+  mq_server_floating_ip_assoc:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: {get_resource: mq_server_floating_ip}
+      port_id: {get_attr: [QM1, addresses, mq_server_net, 0, port]}
+
+#
+# Queue Manager
+#
+  QM1:
+    type: OS::Nova::Server
+    properties:
+      key_name: { get_param: key_name }
+      image: { get_param: server_image }
+      flavor: { get_param: flavor }
+      networks:
+        - network: { get_resource: mq_server_net }
+      security_groups:
+        - { get_resource: mq_security_group }
+      user_data_format: RAW
+      user_data: { get_resource: QM1_user_data }
+
+  QM1_user_data:
+    type: "OS::Heat::MultipartMime"
+    properties:
+      parts:
+      - config: {get_resource: Copy_files_QM1}
+      - config: {get_resource: create_QM1}
+
+  create_QM1:
+    type: "OS::Heat::SoftwareConfig"
+    depends_on: Copy_files_QM1
+    properties:
+      group: ungrouped
+      config:
+        str_replace:
+          params:
+            "%CFG_FILE%": /tmp/QM_Setup.mqsc
+            "%CCDT_HOST%": {get_param: CCDT_ip}
+            "%CCDT_PORT%": 1414
+          template: { get_file: createQM.sh }
+
+  Copy_files_QM1:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        manage_etc_hosts: true
+        write_files:
+          - path: /tmp/QM_Setup.mqsc
+            owner: "mqm:mqm"
+            permissions: "0644"
+            content: { get_file: QM_Setup.mqsc }
+          - path: /tmp/AddCCDT.mqsc
+            owner: "mqm:mqm"
+            permissions: "0644"
+            content:
+              str_replace:
+                params:
+                  "%THIS%": { get_attr: [mq_server_floating_ip, floating_ip_address] }
+                template: { get_file: AddCCDT.mqsc }
+
+#
+# Outputs
+#
+outputs:
+  QM_ip_public:
+    description: >
+      Public IP address of the Queue Manager instance.
+    value: { get_attr: [mq_server_floating_ip, floating_ip_address] }
+
+#
+# End of File
+#
