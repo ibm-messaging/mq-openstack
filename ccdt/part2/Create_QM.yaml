@@ -114,6 +114,7 @@ resources:
 #
   QM1:
     type: OS::Nova::Server
+    depends_on: mq_server_router_interface
     properties:
       key_name: { get_param: key_name }
       image: { get_param: server_image }
