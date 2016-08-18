@@ -113,6 +113,7 @@ resources:
 #
   CCDT_VM:
     type: OS::Nova::Server
+    depends_on: ccdt_router_interface
     properties:
       key_name: { get_param: key_name }
       image: { get_param: server_image }
