@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# This heat template is used to create the OpenStack Heat Stack that creates 10
-# VM's which have a Queue Manager created and configured on them.
+# This heat template is used to create the OpenStack Heat Stack that creates a
+# single VM with a Queue Manager running on it that automatically registers itself
+# with the CCDT host.
 
 heat_template_version: 2014-10-16
 
