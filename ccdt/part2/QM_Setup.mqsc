@@ -12,7 +12,7 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 *
-* This file is used to configure the Queue Manager C1QM1, it is run in runmqsc
+* This file is used to configure the Queue Manager, it is run in runmqsc
 * and is used in the createQM.sh file.
 
 ***********************************************

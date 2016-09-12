@@ -15,9 +15,8 @@
 # limitations under the License.
 #
 # This file Creates and starts a Queue Manager of a given name and then executes
-# a runmqsc command passing in a pre-made file. If this Queue Manager is a
-# "Gateway" Queue Manager it executes runmqsc again passing in a second file
-# that configures additional settings.
+# a runmqsc command passing in a pre-made file. Once that completes it then
+# runs runmqsc -c to register the local Queue Manager details with the CCDT host.
 
 set -x
 
